@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aura Studio — Voice Booking</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --panel: #14141d;
+    --panel-2: #1c1c28;
+    --line: #2a2a3a;
+    --text: #e8e8f0;
+    --muted: #8a8aa0;
+    --accent: #a78bfa;
+    --accent-2: #f472b6;
+    --green: #34d399;
+    --green-dim: #143b30;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(1200px 600px at 80% -10%, #1a1530 0%, var(--bg) 55%);
+    color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    height: 100vh; overflow: hidden;
+  }
+  .app { display: grid; grid-template-columns: 1fr 380px; height: 100vh; }
+
+  /* ── Calendar side ─────────────────────────────────── */
+  .calendar-pane { padding: 28px 32px; overflow: auto; }
+  .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+  .brand .dot {
+    width: 34px; height: 34px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center; font-size: 18px;
+  }
+  .brand h1 { font-size: 20px; margin: 0; letter-spacing: .2px; }
+  .brand .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+  .week {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 10px; margin-top: 22px;
+  }
+  .day {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 10px 8px;
+    display: flex; flex-direction: column; min-height: 0;
+    transition: box-shadow .25s, border-color .25s, transform .25s;
+  }
+  .day.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 10px 40px -12px var(--accent);
+    transform: translateY(-2px);
+  }
+  .day-head { text-align: center; padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }
+  .day-head .dow { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .day-head .dom { font-size: 17px; font-weight: 600; margin-top: 2px; }
+  .day.closed .day-head .dom { color: var(--muted); }
+  .slots { display: flex; flex-direction: column; gap: 5px; overflow: auto; }
+  .slot {
+    font-size: 12px; text-align: center; padding: 5px 4px; border-radius: 8px;
+    border: 1px solid transparent; user-select: none;
+    transition: background .2s, color .2s, transform .2s;
+  }
+  .slot.free { background: var(--panel-2); color: var(--text); border-color: var(--line); }
+  .slot.taken { color: #4a4a5c; text-decoration: line-through; }
+  .slot.mine {
+    background: var(--green-dim); color: var(--green); border-color: var(--green);
+    font-weight: 600;
+  }
+  .slot.flash { animation: pop .6s ease; }
+  @keyframes pop {
+    0% { transform: scale(.8); background: var(--green); color: #052; }
+    60% { transform: scale(1.08); }
+    100% { transform: scale(1); }
+  }
+  .closed-tag { color: var(--muted); font-size: 12px; text-align: center; padding: 10px 0; }
+
+  /* ── Voice side ────────────────────────────────────── */
+  .voice-pane {
+    background: var(--panel); border-left: 1px solid var(--line);
+    display: flex; flex-direction: column; padding: 24px;
+  }
+  .orb-wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 8px 0 18px; }
+  .orb {
+    width: 96px; height: 96px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #2a2a3a, #14141d);
+    border: 1px solid var(--line);
+    display: grid; place-items: center; position: relative;
+    transition: box-shadow .3s, border-color .3s;
+  }
+  .orb::after {
+    content: ""; position: absolute; inset: -6px; border-radius: 50%;
+    border: 2px solid transparent; transition: border-color .3s;
+  }
+  .orb .glyph { font-size: 34px; }
+  body[data-state="listening"] .orb { border-color: var(--accent); box-shadow: 0 0 50px -8px var(--accent); }
+  body[data-state="listening"] .orb::after { border-color: var(--accent); animation: ring 1.4s ease-out infinite; }
+  body[data-state="speaking"] .orb { border-color: var(--green); box-shadow: 0 0 50px -8px var(--green); }
+  body[data-state="thinking"] .orb { border-color: var(--accent-2); box-shadow: 0 0 40px -10px var(--accent-2); }
+  @keyframes ring { 0% { transform: scale(1); opacity: .8; } 100% { transform: scale(1.35); opacity: 0; } }
+  .status { font-size: 13px; color: var(--muted); letter-spacing: .3px; min-height: 18px; }
+
+  .start-btn {
+    width: 100%; padding: 13px; border: none; border-radius: 12px; cursor: pointer;
+    font-size: 15px; font-weight: 600; color: #0a0a0f;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    transition: opacity .2s, transform .1s;
+  }
+  .start-btn:hover { opacity: .92; }
+  .start-btn:active { transform: scale(.99); }
+  .start-btn.end { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
+  .start-btn:disabled { opacity: .5; cursor: default; }
+
+  .tool-activity {
+    margin-top: 14px; min-height: 20px; font-size: 12px; color: var(--accent);
+    display: flex; align-items: center; gap: 8px; opacity: 0; transition: opacity .2s;
+  }
+  .tool-activity.show { opacity: 1; }
+  .tool-activity .spin {
+    width: 11px; height: 11px; border: 2px solid var(--accent); border-top-color: transparent;
+    border-radius: 50%; animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .transcript {
+    flex: 1; overflow: auto; margin-top: 18px; display: flex; flex-direction: column; gap: 10px;
+    padding-top: 14px; border-top: 1px solid var(--line);
+  }
+  .msg { max-width: 85%; padding: 9px 13px; border-radius: 14px; font-size: 14px; }
+  .msg.user { align-self: flex-end; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #0a0a0f; border-bottom-right-radius: 4px; }
+  .msg.agent { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .msg.partial { opacity: .55; }
+  .msg.interrupted { opacity: .6; font-style: italic; }
+  .hint { color: var(--muted); font-size: 13px; text-align: center; margin: auto 0; padding: 24px; }
+  .err { color: #fca5a5; font-size: 13px; margin-top: 10px; }
+</style>
+</head>
+<body data-state="idle">
+  <div class="app">
+    <!-- Calendar -->
+    <section class="calendar-pane">
+      <div class="brand">
+        <div class="dot">✦</div>
+        <div>
+          <h1>Aura Studio</h1>
+          <div class="sub" id="brand-sub">Voice booking · powered by the AssemblyAI Voice Agent API</div>
+        </div>
+      </div>
+      <div class="week" id="week"></div>
+    </section>
+
+    <!-- Voice panel -->
+    <aside class="voice-pane">
+      <div class="orb-wrap">
+        <div class="orb"><span class="glyph" id="glyph">🎙️</span></div>
+        <div class="status" id="status">Tap start, then just talk</div>
+      </div>
+      <button class="start-btn" id="startBtn">Start conversation</button>
+      <div class="tool-activity" id="toolActivity"><span class="spin"></span><span id="toolText"></span></div>
+      <div class="transcript" id="transcript">
+        <div class="hint">Try: “What's open on Friday?” then “Book me a haircut at 2pm, my name's Alex.”</div>
+      </div>
+      <div class="err" id="err"></div>
+    </aside>
+  </div>
+
+<script>
+const AAI_WS = "wss://agents.assemblyai.com/v1/ws";
+const TARGET_RATE = 24000;
+const VOICE = "claire";
+
+let weekData = [];          // [{date, weekday, label, closed, slots:[...]}]
+let dateByWeekday = {};     // "Friday" -> "2026-06-11"
+
+const $ = (id) => document.getElementById(id);
+const setState = (s) => { document.body.dataset.state = s; };
+const setStatus = (t) => { $("status").textContent = t; };
+const setGlyph = (g) => { $("glyph").textContent = g; };
+
+// ── Calendar rendering ───────────────────────────────────────────────
+async function loadWeek() {
+  const { week } = await fetch("/api/availability").then(r => r.json());
+  weekData = week;
+  dateByWeekday = {};
+  for (const d of week) dateByWeekday[d.weekday] = d.date;
+  renderWeek();
+}
+
+function renderWeek() {
+  const el = $("week");
+  el.innerHTML = "";
+  for (const day of weekData) {
+    const col = document.createElement("div");
+    col.className = "day" + (day.closed ? " closed" : "");
+    col.dataset.date = day.date;
+    const [dow, , dom] = day.label.split(" ");
+    col.innerHTML = `
+      <div class="day-head">
+        <div class="dow">${day.weekday.slice(0,3)}</div>
+        <div class="dom">${day.label.replace(day.weekday.slice(0,3) + " ", "")}</div>
+      </div>`;
+    if (day.closed) {
+      col.innerHTML += `<div class="closed-tag">Closed</div>`;
+    } else {
+      const slots = document.createElement("div");
+      slots.className = "slots";
+      for (const s of day.slots) {
+        const cls = s.mine ? "mine" : (s.available ? "free" : "taken");
+        slots.innerHTML += `<div class="slot ${cls}" data-time="${s.time}">${s.label}</div>`;
+      }
+      col.appendChild(slots);
+    }
+    el.appendChild(col);
+  }
+}
+
+function highlightDay(iso) {
+  document.querySelectorAll(".day").forEach(d =>
+    d.classList.toggle("active", d.dataset.date === iso));
+}
+
+function flashSlot(iso, time) {
+  const col = document.querySelector(`.day[data-date="${iso}"]`);
+  if (!col) return;
+  const cell = col.querySelector(`.slot[data-time="${time}"]`);
+  if (cell) { cell.classList.add("flash"); }
+}
+
+// ── Tool execution (client-side; updates the UI, returns to the agent) ─
+async function runTool(name, args) {
+  if (name === "get_availability") {
+    const iso = args.date;
+    const day = await fetch(`/api/availability?date=${encodeURIComponent(iso)}`).then(r => r.json());
+    // refresh local copy + UI
+    const idx = weekData.findIndex(d => d.date === iso);
+    if (idx >= 0) { weekData[idx] = day; renderWeek(); }
+    highlightDay(iso);
+    if (day.closed) return { date: iso, closed: true, message: "We're closed that day." };
+    const open = day.slots.filter(s => s.available).map(s => s.label);
+    return {
+      date: iso, weekday: day.weekday,
+      available_times: open,
+      message: open.length ? `${open.length} openings on ${day.weekday}.` : `Fully booked on ${day.weekday}.`,
+    };
+  }
+
+  if (name === "book_appointment") {
+    const res = await fetch("/api/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        date: args.date, time: args.time,
+        name: args.client_name, service: args.service,
+      }),
+    }).then(r => r.json());
+    if (res.ok) {
+      const day = await fetch(`/api/availability?date=${encodeURIComponent(args.date)}`).then(r => r.json());
+      const idx = weekData.findIndex(d => d.date === args.date);
+      if (idx >= 0) { weekData[idx] = day; renderWeek(); }
+      highlightDay(args.date);
+      flashSlot(args.date, args.time);
+    }
+    return res;
+  }
+  return { error: "unknown tool" };
+}
+
+// ── Agent tool schema ────────────────────────────────────────────────
+function toolDefs() {
+  const validDates = weekData.map(d => `${d.weekday} = ${d.date}`).join(", ");
+  return [
+    {
+      type: "function",
+      name: "get_availability",
+      description: "Get open appointment times for one day. Call this whenever the caller asks what's available or names a day. Returns a list of free time slots like '2:30 PM'.",
+      parameters: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: `The day to check as YYYY-MM-DD. Valid days: ${validDates}` },
+        },
+        required: ["date"],
+      },
+    },
+    {
+      type: "function",
+      name: "book_appointment",
+      description: "Book an appointment once you have the day, time, service, and the caller's name. Confirm the details out loud before calling. Returns a confirmation number.",
+      parameters: {
+        type: "object",
+        properties: {
+          date: { type: "string", description: "Appointment day as YYYY-MM-DD." },
+          time: { type: "string", description: "Start time in 24-hour HH:MM, e.g. '14:30' for 2:30 PM." },
+          client_name: { type: "string", description: "The caller's first name." },
+          service: { type: "string", enum: ["haircut", "color", "styling", "consultation"], description: "Service requested." },
+        },
+        required: ["date", "time", "client_name", "service"],
+      },
+    },
+  ];
+}
+
+function systemPrompt() {
+  const today = weekData[0];
+  const dayList = weekData.map(d => `  ${d.weekday}, ${d.label} → ${d.date}${d.closed ? " (closed)" : ""}`).join("\n");
+  return `You are Mia, the front-desk receptionist at Aura Studio, a hair salon. You book appointments over the phone.
+
+Today is ${today.weekday}, ${today.label} (${today.date}). The schedule for the week:
+${dayList}
+
+How you talk:
+- You are a real person, not an AI. Never break character.
+- Keep it to one or two short sentences. This is a phone call.
+- Warm, upbeat, efficient. Use light filler naturally ("sure", "one sec", "let me check").
+- Never say "Certainly" or "Absolutely". Never list more than three times at once.
+
+Your job:
+- Figure out which day they want, then call get_availability for that day. When you say a weekday, map it to the dates above.
+- Offer two or three open times, not the whole list.
+- Collect the service (haircut, color, styling, or consultation) and their first name before booking.
+- When you have day, time, service, and name, confirm it back in one sentence, then call book_appointment.
+- After booking, read the confirmation number back slowly, digit by digit.
+- Never announce that you're using a tool. Just say something like "let me check" and then give the answer.
+- If a day is closed or fully booked, say so and offer the nearest open day.`;
+}
+
+// ── Audio worklets (inline via Blob URLs) ────────────────────────────
+const captureCode = `
+class CaptureProcessor extends AudioWorkletProcessor {
+  constructor(opts) {
+    super();
+    this.target = (opts.processorOptions && opts.processorOptions.targetRate) || 24000;
+    this.ratio = sampleRate / this.target;   // input samples per output sample
+    this.inBuf = new Float32Array(0);
+    this.readIdx = 0;
+    this.out = [];
+    this.BATCH = 1200; // 50ms @ 24kHz
+  }
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0];
+    if (!ch) return true;
+    const merged = new Float32Array(this.inBuf.length + ch.length);
+    merged.set(this.inBuf); merged.set(ch, this.inBuf.length);
+    this.inBuf = merged;
+    while (this.readIdx + 1 < this.inBuf.length) {
+      const i = Math.floor(this.readIdx);
+      const frac = this.readIdx - i;
+      this.out.push(this.inBuf[i] * (1 - frac) + this.inBuf[i + 1] * frac);
+      this.readIdx += this.ratio;
+      if (this.out.length >= this.BATCH) {
+        const pcm = new Int16Array(this.BATCH);
+        for (let k = 0; k < this.BATCH; k++) {
+          const v = Math.max(-1, Math.min(1, this.out[k]));
+          pcm[k] = v < 0 ? v * 32768 : v * 32767;
+        }
+        this.port.postMessage(pcm.buffer, [pcm.buffer]);
+        this.out = this.out.slice(this.BATCH);
+      }
+    }
+    const consumed = Math.floor(this.readIdx);
+    if (consumed > 0) { this.inBuf = this.inBuf.subarray(consumed); this.readIdx -= consumed; }
+    return true;
+  }
+}
+registerProcessor("capture-processor", CaptureProcessor);
+`;
+
+const playbackCode = `
+class PlaybackProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.ring = new Float32Array(sampleRate * 12);
+    this.w = 0; this.r = 0;
+    this.port.onmessage = (e) => {
+      if (e.data === "clear") { this.w = 0; this.r = 0; return; }
+      const s = e.data;
+      for (let i = 0; i < s.length; i++) { this.ring[this.w % this.ring.length] = s[i]; this.w++; }
+    };
+  }
+  process(outputs) {
+    const o = outputs[0][0];
+    for (let i = 0; i < o.length; i++) {
+      if (this.r < this.w) { o[i] = this.ring[this.r % this.ring.length]; this.r++; }
+      else { o[i] = 0; }
+    }
+    return true;
+  }
+}
+registerProcessor("playback-processor", PlaybackProcessor);
+`;
+
+function resample(float32, fromRate, toRate) {
+  if (fromRate === toRate) return float32;
+  const ratio = fromRate / toRate;
+  const outLen = Math.floor(float32.length / ratio);
+  const out = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const idx = i * ratio, j = Math.floor(idx), frac = idx - j;
+    out[i] = (float32[j] || 0) * (1 - frac) + (float32[j + 1] || 0) * frac;
+  }
+  return out;
+}
+
+// ── Session lifecycle ────────────────────────────────────────────────
+let ws, audioCtx, stream, captureNode, playbackNode, ctxRate;
+let ready = false, running = false;
+let partialEl = null;
+
+async function start() {
+  $("err").textContent = "";
+  setState("connecting"); setStatus("Connecting…"); setGlyph("⏳");
+  $("startBtn").disabled = true;
+
+  // 1. Mint a fresh single-use token on our server (API key stays server-side)
+  let token;
+  try {
+    const r = await fetch("/api/voice-token");
+    if (!r.ok) throw new Error(await r.text());
+    token = (await r.json()).token;
+  } catch (e) {
+    fail("Could not get token: " + e.message); return;
+  }
+
+  // 2. Mic + audio graph
+  try {
+    audioCtx = new AudioContext({ sampleRate: TARGET_RATE });
+    await audioCtx.resume();
+    ctxRate = audioCtx.sampleRate; // Safari may ignore 24k and use hardware rate
+
+    const capBlob = URL.createObjectURL(new Blob([captureCode], { type: "application/javascript" }));
+    const playBlob = URL.createObjectURL(new Blob([playbackCode], { type: "application/javascript" }));
+    await audioCtx.audioWorklet.addModule(capBlob);
+    await audioCtx.audioWorklet.addModule(playBlob);
+
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true },
+    });
+    const src = audioCtx.createMediaStreamSource(stream);
+    captureNode = new AudioWorkletNode(audioCtx, "capture-processor", {
+      processorOptions: { targetRate: TARGET_RATE },
+    });
+    src.connect(captureNode); // not connected to destination — don't echo the mic
+    playbackNode = new AudioWorkletNode(audioCtx, "playback-processor");
+    playbackNode.connect(audioCtx.destination);
+
+    captureNode.port.onmessage = (e) => {
+      if (!ready || !ws || ws.readyState !== WebSocket.OPEN) return;
+      const bytes = new Uint8Array(e.data);
+      let bin = "";
+      for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      ws.send(JSON.stringify({ type: "input.audio", audio: btoa(bin) }));
+    };
+  } catch (e) {
+    fail("Microphone error: " + e.message); return;
+  }
+
+  // 3. Connect directly to the Voice Agent API with the temp token
+  const url = new URL(AAI_WS);
+  url.searchParams.set("token", token);
+  ws = new WebSocket(url);
+
+  ws.addEventListener("open", () => {
+    ws.send(JSON.stringify({
+      type: "session.update",
+      session: {
+        system_prompt: systemPrompt(),
+        greeting: "Hi, thanks for calling Aura Studio — this is Mia. What can I book for you?",
+        tools: toolDefs(),
+        input: { keyterms: ["Aura Studio", "haircut", "color", "styling", "consultation"] },
+        output: { voice: VOICE },
+      },
+    }));
+  });
+
+  ws.addEventListener("message", (ev) => handleEvent(JSON.parse(ev.data)));
+  ws.addEventListener("close", () => { if (running) fail("Connection closed."); });
+  ws.addEventListener("error", () => fail("WebSocket error."));
+
+  running = true;
+  $("startBtn").disabled = false;
+  $("startBtn").textContent = "End conversation";
+  $("startBtn").classList.add("end");
+}
+
+function handleEvent(msg) {
+  switch (msg.type) {
+    case "session.ready":
+      ready = true; setState("listening"); setStatus("Listening…"); setGlyph("👂");
+      break;
+    case "input.speech.started":
+      setState("listening"); setStatus("Listening…"); setGlyph("👂");
+      playbackNode.port.postMessage("clear"); // snappier barge-in
+      break;
+    case "input.speech.stopped":
+      setState("thinking"); setStatus("Thinking…"); setGlyph("💭");
+      break;
+    case "transcript.user.delta":
+      showPartialUser(msg.text || msg.delta || "");
+      break;
+    case "transcript.user":
+      finalizeUser(msg.text);
+      break;
+    case "reply.started":
+      setState("thinking"); setGlyph("💭");
+      break;
+    case "reply.audio":
+      setState("speaking"); setStatus("Speaking…"); setGlyph("🗣️");
+      playAudio(msg.data);
+      break;
+    case "transcript.agent":
+      addMsg("agent", msg.text, msg.interrupted);
+      break;
+    case "reply.done":
+      if (msg.status === "interrupted") playbackNode.port.postMessage("clear");
+      if (ready) { setState("listening"); setStatus("Listening…"); setGlyph("👂"); }
+      break;
+    case "tool.call":
+      onToolCall(msg);
+      break;
+    case "session.error":
+    case "error":
+      fail("Error: " + (msg.error || msg.message || msg.code || "unknown"));
+      break;
+  }
+}
+
+async function onToolCall(msg) {
+  const args = msg.arguments || msg.args || {};
+  const label = msg.name === "get_availability"
+    ? `Checking ${args.date || "the calendar"}…`
+    : `Booking ${args.service || "appointment"}…`;
+  showTool(label);
+  let result;
+  try { result = await runTool(msg.name, args); }
+  catch (e) { result = { error: String(e) }; }
+  hideTool();
+  // Send the result the moment the tool returns (result must be a JSON string).
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: "tool.result",
+      call_id: msg.call_id,
+      result: JSON.stringify(result),
+    }));
+  }
+}
+
+function playAudio(b64) {
+  const raw = atob(b64);
+  const pcm = new Int16Array(raw.length / 2);
+  for (let i = 0; i < pcm.length; i++) pcm[i] = raw.charCodeAt(i * 2) | (raw.charCodeAt(i * 2 + 1) << 8);
+  let f = new Float32Array(pcm.length);
+  for (let i = 0; i < pcm.length; i++) f[i] = pcm[i] / 32768;
+  if (ctxRate !== TARGET_RATE) f = resample(f, TARGET_RATE, ctxRate);
+  playbackNode.port.postMessage(f);
+}
+
+// ── Transcript UI ────────────────────────────────────────────────────
+function clearHint() { const h = $("transcript").querySelector(".hint"); if (h) h.remove(); }
+function showPartialUser(text) {
+  clearHint();
+  if (!partialEl) {
+    partialEl = document.createElement("div");
+    partialEl.className = "msg user partial";
+    $("transcript").appendChild(partialEl);
+  }
+  partialEl.textContent = text;
+  scrollTranscript();
+}
+function finalizeUser(text) {
+  clearHint();
+  if (partialEl) { partialEl.textContent = text; partialEl.classList.remove("partial"); partialEl = null; }
+  else addMsg("user", text);
+}
+function addMsg(role, text, interrupted) {
+  if (!text) return;
+  clearHint();
+  const el = document.createElement("div");
+  el.className = `msg ${role}` + (interrupted ? " interrupted" : "");
+  el.textContent = text;
+  $("transcript").appendChild(el);
+  scrollTranscript();
+}
+function scrollTranscript() { const t = $("transcript"); t.scrollTop = t.scrollHeight; }
+
+function showTool(text) { $("toolText").textContent = text; $("toolActivity").classList.add("show"); }
+function hideTool() { $("toolActivity").classList.remove("show"); }
+
+function fail(message) {
+  $("err").textContent = message;
+  setState("idle"); setStatus("Stopped"); setGlyph("🎙️");
+  teardown();
+  $("startBtn").disabled = false;
+  $("startBtn").textContent = "Start conversation";
+  $("startBtn").classList.remove("end");
+}
+
+function stop() {
+  running = false; ready = false;
+  teardown();
+  setState("idle"); setStatus("Ended — tap start to talk again"); setGlyph("🎙️");
+  $("startBtn").textContent = "Start conversation";
+  $("startBtn").classList.remove("end");
+}
+
+function teardown() {
+  try { ws && ws.close(); } catch {}
+  try { stream && stream.getTracks().forEach(t => t.stop()); } catch {}
+  try { audioCtx && audioCtx.close(); } catch {}
+  ws = null; stream = null; audioCtx = null; ready = false;
+}
+
+$("startBtn").addEventListener("click", () => { running ? stop() : start(); });
+
+loadWeek();
+</script>
+</body>
+</html>
