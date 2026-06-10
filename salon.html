@@ -253,11 +253,18 @@ function toolDefs() {
     {
       type: "function",
       name: "get_availability",
-      description: "Get open appointment times for one day. Call this whenever the caller asks what's available or names a day. Returns a list of free time slots like '2:30 PM'.",
+      description:
+        "Look up the salon's open appointment times for ONE day. You do not know the schedule yourself — you MUST call this before telling the caller anything about availability, and you may only offer times that it returns. Never invent or guess times. " +
+        "Returns { date, weekday, available_times: ['10:00 AM', ...], message }, or { date, closed: true } when the salon is closed that day.",
       parameters: {
         type: "object",
         properties: {
-          date: { type: "string", description: `The day to check as YYYY-MM-DD. Valid days: ${validDates}` },
+          date: {
+            type: "string",
+            format: "date",
+            description: `The single day to check, as YYYY-MM-DD. Map the caller's weekday to one of these dates: ${validDates}.`,
+            examples: [weekData[0].iso],
+          },
         },
         required: ["date"],
       },
@@ -265,13 +272,24 @@ function toolDefs() {
     {
       type: "function",
       name: "book_appointment",
-      description: "Book an appointment once you have the day, time, service, and the caller's name. Confirm the details out loud before calling. Returns a confirmation number.",
+      description:
+        "Reserve an appointment on the calendar. Only call this AFTER get_availability, and only with a time that get_availability returned for that day. Read the day, time, service, and name back to the caller out loud first. " +
+        "Returns { ok: true, confirmation: 'AUR-1234' } on success.",
       parameters: {
         type: "object",
         properties: {
-          date: { type: "string", description: "Appointment day as YYYY-MM-DD." },
-          time: { type: "string", description: "Start time like '2:30 PM'." },
-          client_name: { type: "string", description: "The caller's first name." },
+          date: {
+            type: "string",
+            format: "date",
+            description: "Appointment day as YYYY-MM-DD (same date you passed to get_availability).",
+            examples: [weekData[0].iso],
+          },
+          time: {
+            type: "string",
+            description: "Start time, written exactly as get_availability returned it (e.g. '2:30 PM'). Must be one of the times that call listed.",
+            examples: ["2:30 PM"],
+          },
+          client_name: { type: "string", description: "The caller's first name.", examples: ["Alex"] },
           service: { type: "string", enum: SERVICES, description: "Service requested." },
         },
         required: ["date", "time", "client_name", "service"],
@@ -295,7 +313,8 @@ How you talk:
 - Never say "Certainly" or "Absolutely". Never list more than three times at once.
 
 Your job:
-- Figure out which day they want, then call get_availability for that day. When you say a weekday, map it to the dates above.
+- You do NOT know the schedule. Never invent, guess, or recall availability or specific times. To tell a caller what's open you MUST call get_availability for that day and offer only the times it returns.
+- Figure out which day they want, then call get_availability for that day. When you say a weekday, map it to the dates above. If you say you'll check ("one sec"), actually call the tool right then.
 - Offer two or three open times, not the whole list.
 - Collect the service (haircut, color, styling, or consultation) and their first name before booking.
 - When you have day, time, service, and name, confirm it back in one sentence, then call book_appointment.
@@ -470,6 +489,7 @@ async function start() {
 }
 
 function handleEvent(msg) {
+  console.debug("⟵", msg.type, msg); // every server event — open devtools to watch the flow
   switch (msg.type) {
     case "session.ready":
       ready = true; setState("listening"); setStatus("Listening…"); setGlyph("👂");
@@ -526,6 +546,7 @@ async function onToolCall(msg) {
   let result;
   try { result = runTool(msg.name, args); }
   catch (e) { result = { error: String(e) }; }
+  console.debug("⚙ tool.call", msg.name, args, "→", result);
   setToolResult(entry, result);
   // Buffer the result. It's sent only once reply.done is the latest event —
   // sending it now (mid transition-phrase) makes the agent ignore it.
@@ -539,6 +560,7 @@ function flushResults() {
   if (!canSendResults || !pendingResults.length) return;
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   for (const { call_id, result } of pendingResults) {
+    console.debug("⟶ tool.result", call_id, result);
     ws.send(JSON.stringify({
       type: "tool.result",
       call_id,
