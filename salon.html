@@ -380,7 +380,8 @@ class PlaybackProcessor extends AudioWorkletProcessor {
     };
   }
   process(outputs) {
-    const o = outputs[0][0];
+    const o = outputs[0] && outputs[0][0];
+    if (!o) return true;
     for (let i = 0; i < o.length; i++) {
       if (this.r < this.w) { o[i] = this.ring[this.r % this.ring.length]; this.r++; }
       else { o[i] = 0; }
