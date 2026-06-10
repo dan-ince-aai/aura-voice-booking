@@ -66,6 +66,28 @@ Open **http://localhost:3000**, click **Start conversation**, allow the mic, and
 > Mic access requires a secure origin — `localhost` counts, so local dev works.
 > To run it remotely, serve over HTTPS.
 
+## Deploy to Railway
+
+This runs on [Railway](https://railway.com) as-is — one web process that reads
+`$PORT` and your API key from the environment, and Railway gives it a public HTTPS
+URL (which is exactly what the microphone needs).
+
+1. Create a new Railway project **→ Deploy from GitHub repo**, and pick this repo.
+2. Under **Variables**, add `ASSEMBLYAI_API_KEY` (your key).
+3. Deploy. Railway builds with Nixpacks, installs `requirements.txt`, and runs
+   `python salon.py` (see [`railway.toml`](railway.toml)).
+
+Open the assigned `*.up.railway.app` URL and click **Start conversation**.
+
+Or from the CLI:
+
+```bash
+npm i -g @railway/cli
+railway init
+railway up
+# then set ASSEMBLYAI_API_KEY in the Railway dashboard (Variables tab)
+```
+
 ## How the temp-token flow works
 
 1. The browser calls `GET /api/voice-token` on this server.

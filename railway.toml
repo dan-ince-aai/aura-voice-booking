@@ -1,0 +1,11 @@
+# Railway deployment config — https://docs.railway.com/reference/config-as-code
+# Railway sets $PORT and injects env vars (e.g. ASSEMBLYAI_API_KEY); salon.py
+# reads both. It assigns a public HTTPS URL, which is what the mic needs.
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "python salon.py"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
