@@ -170,7 +170,7 @@
 <script>
 const AAI_WS = "wss://agents.assemblyai.com/v1/ws";
 const TARGET_RATE = 24000;
-const VOICE = "mia";
+const VOICE = "david";
 
 let weekData = [];          // [{date, weekday, label, closed, slots:[...]}]
 let dateByWeekday = {};     // "Friday" -> "2026-06-11"
@@ -305,7 +305,7 @@ function toolDefs() {
 function systemPrompt() {
   const today = weekData[0];
   const dayList = weekData.map(d => `  ${d.weekday}, ${d.label} → ${d.date}${d.closed ? " (closed)" : ""}`).join("\n");
-  return `You are Mia, the front-desk receptionist at Aura Studio, a hair salon. You book appointments over the phone.
+  return `You are David, the front-desk receptionist at Aura Studio, a hair salon. You book appointments over the phone.
 
 Today is ${today.weekday}, ${today.label} (${today.date}). The schedule for the week:
 ${dayList}
@@ -467,7 +467,7 @@ async function start() {
       type: "session.update",
       session: {
         system_prompt: systemPrompt(),
-        greeting: "Hi, thanks for calling Aura Studio — this is Mia. What can I book for you?",
+        greeting: "Hi, thanks for calling Aura Studio — this is David. What can I book for you?",
         tools: toolDefs(),
         input: { keyterms: ["Aura Studio", "haircut", "color", "styling", "consultation"] },
         output: { voice: VOICE },
